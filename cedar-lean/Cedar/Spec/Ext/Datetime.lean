@@ -93,7 +93,7 @@ def tzOffsetMinsLt60 (str : String) : Bool :=
   str.endsWith "Z" ||
   -- `DateWithOffset` or `DateWithOffsetAndMillis` offset is last 4 chars.
   -- Minutes component is last two chars.
-  match (str.takeRight 2).toNat? with
+  match ((str.takeEnd 2).toString).toNat? with
   | .some minsOffset => minsOffset < 60
   | .none => false
 
@@ -103,21 +103,21 @@ def tzOffsetMinsLt60 (str : String) : Bool :=
   than expected.  https://github.com/leanprover/lean4/issues/7478
 -/
 def checkComponentLen (str : String) : Bool :=
-  match str.split (· == 'T') with
+  match str.splitOn "T" with
   | [date] => checkDateComponentLen date
   | [date, timeMsOffset] => checkDateComponentLen date && checkTimeMsOffsetComponentLen timeMsOffset
   | _ => false
   where
     checkDateComponentLen (str : String) : Bool :=
-      match str.split (· == '-') with
+      match str.splitOn "-" with
       | [year, month, day] => year.length == 4 && month.length == 2 && day.length == 2
       | _ => false
     checkTimeMsOffsetComponentLen (str : String) : Bool :=
-      match str.split (λ c => c == '.' || c == '+' || c == '-' || c == 'Z') with
-      | time :: _ => checkTimeLen time
-      | _ => false
+      let timeChars := str.toList.takeWhile (fun c => c ≠ '.' && c ≠ '+' && c ≠ '-' && c ≠ 'Z')
+      let time := String.ofList timeChars
+      checkTimeLen time
     checkTimeLen (str : String) : Bool :=
-      match str.split (· == ':') with
+      match str.splitOn ":" with
       | [h, m, s] => h.length == 2 && m.length == 2 && s.length == 2
       | _ => false
 
@@ -215,23 +215,23 @@ def unitsToMilliseconds (days hours minutes second milliseconds: Int) : Int :=
 
 def isNegativeDuration (str: String) : Bool × String :=
   match str.front with
-  | '-' => (true, str.drop 1)
+  | '-' => (true, (str.drop 1).toString)
   | _   => (false, str)
 
 def parseUnit? (isNegative : Bool) (str : String) (suffix : String) : Option (Int × String) :=
   if str.endsWith suffix
   then
-    let newStr := str.dropRight suffix.length
+    let newStr := (str.dropEnd suffix.length).toString
     let newStrList := newStr.toList
     let digits := ((newStrList.reverse).takeWhile Char.isDigit).reverse
     if digits.isEmpty
     then none
     else do
-      let nUnsignedUnits ← String.toNat? (String.mk digits)
+      let nUnsignedUnits ← String.toNat? (String.ofList digits)
       let units ← if isNegative
         then durationUnits? (Int.negOfNat nUnsignedUnits) suffix
         else durationUnits? (Int.ofNat nUnsignedUnits) suffix
-      some (units, newStr.dropRight digits.length)
+      some (units, (newStr.dropEnd digits.length).toString)
   else
     some (0, str)
 

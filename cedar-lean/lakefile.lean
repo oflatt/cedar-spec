@@ -18,9 +18,9 @@ import Lake
 open Lake DSL
 
 meta if get_config? env = some "dev" then -- dev is so not everyone has to build it
-require "leanprover" / "doc-gen4" @ git "v4.24.0"
+require "leanprover" / "doc-gen4" @ git "v4.25.1"
 
-require "leanprover-community" / "batteries" @ git "v4.24.0"
+require "leanprover-community" / "batteries" @ git "1063256a0708fe80d9bfd343d904ce4f3ccc65a5"
 
 package Cedar
 
@@ -77,7 +77,8 @@ script checkThm do
   for entry in dir.toList do
     let fn := entry.fileName
     if fn.endsWith ".lean" then
-      let ln := s!"import Cedar.Thm.{fn.dropRight 5}\n"
+      let stem := (fn.splitOn ".lean").headD fn
+      let ln := s!"import Cedar.Thm.{stem}\n"
       if thm.replace ln "" == thm && symcc.replace ln "" == symcc then
         IO.println s!"Neither Cedar.Thm nor SymCC imports Cedar/Thm/{fn}"
         return 1
