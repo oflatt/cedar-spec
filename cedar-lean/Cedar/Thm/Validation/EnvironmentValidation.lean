@@ -74,9 +74,12 @@ theorem validate_attrs_well_formed_is_sound
     cases h : hd.snd with
     | optional attr_ty =>
       simp only [h, bind, Except.bind] at hok
-      split at hok
-      · contradiction
-      · rename_i hwf_hd
+      cases hres : attr_ty.validateWellFormed env with
+      | ok _ =>
+        have hwf_hd : attr_ty.validateWellFormed env = .ok () := by
+          simpa using hres
+        have hok_tl : validateAttrsWellFormed env tl = .ok () := by
+          simpa [hres, QualifiedType.validateWellFormed] using hok
         have := (Map.in_list_iff_find?_some hwf).mpr hfind
         simp only [Map.kvs, List.mem_cons] at this
         cases this with
@@ -89,12 +92,17 @@ theorem validate_attrs_well_formed_is_sound
           have hwf_tl : (Map.mk tl).WellFormed
           := Map.wf_implies_tail_wf hwf
           have := (Map.in_list_iff_find?_some hwf_tl).mp htl
-          exact validate_attrs_well_formed_is_sound hwf_tl hok this
+          exact validate_attrs_well_formed_is_sound hwf_tl hok_tl this
+      | error err =>
+        simp [hres, QualifiedType.validateWellFormed] at hok
     | required attr_ty =>
       simp only [h, bind, Except.bind] at hok
-      split at hok
-      · contradiction
-      · rename_i hwf_hd
+      cases hres : attr_ty.validateWellFormed env with
+      | ok _ =>
+        have hwf_hd : attr_ty.validateWellFormed env = .ok () := by
+          simpa using hres
+        have hok_tl : validateAttrsWellFormed env tl = .ok () := by
+          simpa [hres, QualifiedType.validateWellFormed] using hok
         have := (Map.in_list_iff_find?_some hwf).mpr hfind
         simp only [Map.kvs, List.mem_cons] at this
         cases this with
@@ -107,7 +115,9 @@ theorem validate_attrs_well_formed_is_sound
           have hwf_tl : (Map.mk tl).WellFormed
           := Map.wf_implies_tail_wf hwf
           have := (Map.in_list_iff_find?_some hwf_tl).mp htl
-          exact validate_attrs_well_formed_is_sound hwf_tl hok this
+          exact validate_attrs_well_formed_is_sound hwf_tl hok_tl this
+      | error err =>
+        simp [hres, QualifiedType.validateWellFormed] at hok
 termination_by sizeOf rty
 decreasing_by
   any_goals
@@ -136,20 +146,17 @@ theorem type_validate_well_formed_is_sound
   cases ty with
   | bool _ | int | string | ext _ => constructor
   | entity ety =>
-    simp only [CedarType.validateWellFormed] at hok
+    dsimp [CedarType.validateWellFormed] at hok
     constructor
     exact entity_type_validate_well_formed_is_sound hok
   | set ty =>
-    simp only [CedarType.validateWellFormed] at hok
+    dsimp [CedarType.validateWellFormed] at hok
     constructor
     exact type_validate_well_formed_is_sound hok
   | record rty =>
     -- Some simplifications
-    simp only [
-      CedarType.validateWellFormed,
-      Except.bind_ok,
-      Except.bind_err,
-    ] at hok
+    dsimp [CedarType.validateWellFormed] at hok
+    simp only [Except.bind_ok, Except.bind_err] at hok
     cases hwf_rty : rty.wellFormed
     · simp only [hwf_rty, Bool.false_eq_true, ↓reduceIte, reduceCtorEq] at hok
     simp only [hwf_rty, ↓reduceIte] at hok

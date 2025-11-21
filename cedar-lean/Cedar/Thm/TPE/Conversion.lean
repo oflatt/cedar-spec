@@ -608,28 +608,28 @@ theorem conversion_preserves_typedness:
 termination_by sizeOf expr
 decreasing_by
   all_goals (
-    simp
+    simp (config := { failIfUnchanged := false })
     rename_i a b d d _e _f _g _ _i _j _k _l _m _n _o
     (first
-     | rename_i p r _s; rw [r]; simp; omega
-     | rename_i p q r s t u _v; rw [s]; simp; omega
-     | rw [a]; simp; omega
-     | rw [b]; simp; omega
-     | rw [d]; simp; omega
+     | rename_i p r _s; rw [r]; simp (config := { failIfUnchanged := false }); omega
+     | rename_i p q r s t u _v; rw [s]; simp (config := { failIfUnchanged := false }); omega
+     | rw [a]; simp (config := { failIfUnchanged := false }); omega
+     | rw [b]; simp (config := { failIfUnchanged := false }); omega
+     | rw [d]; simp (config := { failIfUnchanged := false }); omega
      | skip)
   )
   . rw [d]
-    simp
+    simp (config := { failIfUnchanged := false })
     let h := List.sizeOf_lt_of_mem hy
     omega
   . rename_i p q r _s
     rw [r]
-    simp
+    simp (config := { failIfUnchanged := false })
     let h := List.sizeOf_lt_of_mem inm
     simp at h
     omega
   . rw [b]
-    simp
+    simp (config := { failIfUnchanged := false })
     let h := List.sizeOf_lt_of_mem hy
     simp at h
     omega
