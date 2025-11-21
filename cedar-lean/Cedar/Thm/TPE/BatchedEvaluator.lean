@@ -62,9 +62,9 @@ theorem as_partial_request_refines {req : Request} :
 theorem any_refines_empty_entities (es : Entities) :
   EntitiesRefine es (Map.empty : PartialEntities) := by
   intro uid data h_find
-  have : False := by
-    simpa [Map.find?, Map.empty] using h_find
-  cases this
+  have h := by
+    simpa [Map.empty, Map.find?] using h_find
+  cases h
 
 /-- Helper lemma: appending partial stores preserves entity refinement. -/
 theorem entities_refine_append
@@ -78,10 +78,10 @@ theorem entities_refine_append
     simpa [Data.Map.find?_append] using h_find
   cases h_case : m₁.find? uid with
   | some data₁ =>
-      have h_eq := by
+      have h_eq : data₁ = data := by
         simpa [Option.or, h_case] using h_or
       cases h_eq
-      exact h₁ uid data₁ h_case
+      exact h₁ uid data h_case
   | none =>
       have h_find₂ : m₂.find? uid = some data := by
         simpa [Option.or, h_case] using h_or
@@ -96,7 +96,19 @@ theorem direct_request_and_entities_refine (req : Request) (es : Entities) :
     have h_map := Data.Map.find?_mapOnValues_some' EntityData.asPartial h_find
     rcases h_map with ⟨data₁, h_find₁, h_eq⟩
     subst h_eq
-    refine ⟨data₁, h_find₁, ?_, ?_, ?_⟩ <;> simp [EntityData.asPartial] using PartialIsValid.some _ _ rfl
+    have h_attrs : PartialIsValid (fun x => x = data₁.attrs) (some data₁.attrs) :=
+      PartialIsValid.some _ _ rfl
+    have h_ancestors : PartialIsValid (fun x => x = data₁.ancestors) (some data₁.ancestors) :=
+      PartialIsValid.some _ _ rfl
+    have h_tags : PartialIsValid (fun x => x = data₁.tags) (some data₁.tags) :=
+      PartialIsValid.some _ _ rfl
+    refine ⟨data₁, h_find₁, ?_, ?_, ?_⟩
+    · simpa [EntityData.asPartial]
+        using h_attrs
+    · simpa [EntityData.asPartial]
+        using h_ancestors
+    · simpa [EntityData.asPartial]
+        using h_tags
 
 /--
 Running `batchedEvalLoop` preserves the evaluation result of the current residual.
@@ -121,12 +133,21 @@ theorem batched_eval_loop_eq_evaluate
   | succ iters ih =>
       classical
       rcases h_refine with ⟨h_req_refine, h_store_refine⟩
-      set toLoad := x.allLiteralUIDs.filter fun uid => (current_store.find? uid).isNone with h_toLoad
-      set newEntities := (loader toLoad).mapOnValues MaybeEntityData.asPartial with h_newEntities
-      set newStore := newEntities ++ current_store with h_newStore
+      let toLoad := x.allLiteralUIDs.filter fun uid => (current_store.find? uid).isNone
+      have h_toLoad : x.allLiteralUIDs.filter (fun uid => (current_store.find? uid).isNone) = toLoad := rfl
+      let newEntities := (loader toLoad).mapOnValues MaybeEntityData.asPartial
+      have h_newEntities : (loader toLoad).mapOnValues MaybeEntityData.asPartial = newEntities := rfl
+      let newStore := newEntities ++ current_store
+      have h_newStore : newEntities ++ current_store = newStore := rfl
       obtain ⟨_, h_new_entities_refine⟩ := h_loader toLoad
       have h_store_refine' : EntitiesRefine es newStore :=
-        entities_refine_append es newEntities current_store h_new_entities_refine h_store_refine
+        by
+          simpa [h_newStore, h_newEntities] using
+            entities_refine_append es
+              ((loader toLoad).mapOnValues MaybeEntityData.asPartial)
+              current_store
+              h_new_entities_refine
+              h_store_refine
       have h_refine_new :
         RequestAndEntitiesRefine req es req.asPartialRequest newStore :=
           ⟨h_req_refine, h_store_refine'⟩
@@ -144,21 +165,30 @@ theorem batched_eval_loop_eq_evaluate
       have h_wt_newRes :
         Residual.WellTyped env (Cedar.TPE.evaluate x req.asPartialRequest newStore) :=
           partial_eval_preserves_well_typed h_env h_refine_new h_wt
-      cases h_newRes : Cedar.TPE.evaluate x req.asPartialRequest newStore with
+      generalize h_evalRes : Cedar.TPE.evaluate x req.asPartialRequest newStore = res
+      have h_eval_eq' := by
+        simpa [h_evalRes, h_newStore, h_newEntities] using h_eval_eq
+      have h_wt_res : Residual.WellTyped env res := by
+        simpa [h_evalRes, h_newStore, h_newEntities] using h_wt_newRes
+      have h_rec := ih h_wt_res h_refine_new
+      cases res with
       | val v ty =>
-          have h_eval_eq' := by
-            simpa [h_newRes] using h_eval_eq
-          simpa [batchedEvalLoop, h_toLoad, h_newEntities, h_newStore, h_newRes, Residual.evaluate]
+          simpa [batchedEvalLoop, h_toLoad, h_newEntities, h_newStore, h_evalRes, Residual.evaluate]
             using h_eval_eq'
-      | _ newRes =>
-          have h_eval_eq' := by
-            simpa [h_newRes] using h_eval_eq
-          have h_wt_newRes' : Residual.WellTyped env newRes := by
-            simpa [h_newRes] using h_wt_newRes
-          have h_rec := ih h_wt_newRes' h_refine_new iters
-          have h_rec' := h_rec
-          simp [batchedEvalLoop, h_toLoad, h_newEntities, h_newStore, h_newRes] at h_rec' ⊢
-          exact h_rec'.trans h_eval_eq'
+      | var v ty
+      | ite cond thenExpr elseExpr ty
+      | and a b ty
+      | or a b ty
+      | unaryApp op expr ty
+      | binaryApp op a b ty
+      | getAttr expr attr ty
+      | hasAttr expr attr ty
+      | set ls ty
+      | record map ty
+      | call xfn args ty
+      | error ty =>
+          simp [batchedEvalLoop, h_toLoad, h_newEntities, h_newStore, h_evalRes] at h_rec ⊢
+          exact h_rec.trans h_eval_eq'
 
 /--
 The main correctness theorem for batched evaluation: batched evaluation with an
